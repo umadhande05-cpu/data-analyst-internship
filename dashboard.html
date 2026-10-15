@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sales & Profit Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--tx:#1f2937;--mu:#6b7280}
+@media(prefers-color-scheme:dark){:root{--bg:#111827;--card:#1f2937;--tx:#f3f4f6;--mu:#9ca3af}}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--tx);padding:16px}
+h1{margin:0 0 4px;font-size:22px}.sub{color:var(--mu);font-size:13px;margin-bottom:12px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+select,input{padding:6px;border-radius:6px;border:1px solid var(--mu);background:var(--card);color:var(--tx)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.k,.c{background:var(--card);border-radius:8px;padding:12px;box-shadow:0 1px 3px #0002}
+.k b{display:block;font-size:22px}.k span{color:var(--mu);font-size:12px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px}
+.c{height:290px;position:relative}
+</style></head><body>
+<h1>Sales &amp; Profit Dashboard</h1>
+<div class="sub" id="msg">Loading financials.csv … or choose your data file:</div>
+<div class="bar"><input type="file" id="f" accept=".csv,.tsv,.txt">
+<select id="seg"></select><select id="yr"></select></div>
+<div class="kpis" id="kpis"></div>
+<div class="g">
+<div class="c"><canvas id="c1"></canvas></div><div class="c"><canvas id="c2"></canvas></div>
+<div class="c"><canvas id="c3"></canvas></div><div class="c"><canvas id="c4"></canvas></div>
+<div class="c"><canvas id="c5"></canvas></div></div>
+<script>
+let rows=[],ch={};const $=id=>document.getElementById(id);
+const fmt=n=>n.toLocaleString('en-US',{maximumFractionDigits:0});
+function parse(t){const L=t.trim().split(/\r?\n/),d=L[0].includes('\t')?'\t':',';
+ const H=L[0].split(d).map(s=>s.trim());
+ return L.slice(1).map(l=>{const v=l.split(d),o={};H.forEach((h,i)=>o[h]=(v[i]||'').trim());
+  ['Units Sold','Sales','Profit','Gross Sales','Discounts','COGS','Month Number','Year'].forEach(k=>o[k]=+o[k]);return o})}
+function load(t){rows=parse(t);$('msg').textContent=rows.length+' rows loaded';
+ fill('seg','Segment');fill('yr','Year');draw()}
+function fill(id,k){const s=$(id);s.innerHTML='<option value="">All '+k+'s</option>'+
+ [...new Set(rows.map(r=>r[k]))].sort().map(v=>`<option>${v}</option>`).join('')}
+function grp(a,k,m){const o={};a.forEach(r=>o[r[k]]=(o[r[k]]||0)+r[m]);return o}
+function mk(id,type,labels,data,label,opt={}){if(ch[id])ch[id].destroy();
+ ch[id]=new Chart($(id),{type,data:{labels,datasets:data.map((d,i)=>({label:label[i],data:d,
+ backgroundColor:['#2563eb','#16a34a','#f59e0b','#dc2626','#7c3aed','#0891b2'],borderColor:i?'#16a34a':'#2563eb'}))},
+ options:{maintainAspectRatio:false,plugins:{title:{display:true,text:opt.t}}}})}
+function draw(){let r=rows;const s=$('seg').value,y=$('yr').value;
+ if(s)r=r.filter(x=>x.Segment==s);if(y)r=r.filter(x=>x.Year==y);
+ const S=r.reduce((a,x)=>a+x.Sales,0),P=r.reduce((a,x)=>a+x.Profit,0),U=r.reduce((a,x)=>a+x['Units Sold'],0);
+ $('kpis').innerHTML=[['Total Sales',fmt(S)],['Total Profit',fmt(P)],['Profit Margin',(P/S*100).toFixed(1)+'%'],['Units Sold',fmt(U)]]
+  .map(k=>`<div class="k"><b>${k[1]}</b><span>${k[0]}</span></div>`).join('');
+ const m={};r.forEach(x=>{const k=x.Year*100+x['Month Number'];m[k]=m[k]||[0,0];m[k][0]+=x.Sales;m[k][1]+=x.Profit});
+ const mk_=Object.keys(m).sort();
+ mk('c1','bar',mk_.map(k=>k.slice(0,4)+'-'+k.slice(4)),[mk_.map(k=>m[k][0]),mk_.map(k=>m[k][1])],['Sales','Profit'],{t:'Monthly Sales & Profit'});
+ const sp=grp(r,'Segment','Profit');mk('c2','bar',Object.keys(sp),[Object.values(sp)],['Profit'],{t:'Profit by Segment'});
+ const cs=grp(r,'Country','Sales');mk('c3','bar',Object.keys(cs),[Object.values(cs)],['Sales'],{t:'Sales by Country'});
+ const ps=grp(r,'Product','Sales');mk('c4','doughnut',Object.keys(ps),[Object.values(ps)],['Sales'],{t:'Sales by Product'});
+ const db=grp(r,'Discount Band','Profit');const ds=grp(r,'Discount Band','Sales');const ks=['None','Low','Medium','High'].filter(k=>k in db);
+ mk('c5','bar',ks,[ks.map(k=>db[k]/ds[k]*100)],['Profit margin %'],{t:'Profit Margin % by Discount Band'})}
+$('f').onchange=e=>e.target.files[0].text().then(load);$('seg').onchange=$('yr').onchange=draw;
+fetch('financials.csv').then(r=>r.ok?r.text():Promise.reject()).then(load).catch(()=>$('msg').textContent='Choose your data file (financials.csv) to view the dashboard');
+</script></body></html>
